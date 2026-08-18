@@ -1,0 +1,9 @@
+[Plugin]
+Module=wallpaper-rotator
+Name=Wallpaper Rotator
+Description=Changes the desktop wallpaper automatically at a set interval.
+Authors=Jason Perlow <jperlow@gmail.com>
+Copyright=Copyright © 2026 Jason Perlow
+Website=https://gitlab.com/ncz-os
+License=GPL-3.0-or-later
+Version=1.0

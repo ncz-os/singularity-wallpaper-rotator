@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="dev.sinty.plugin.wallpaper-rotator"
+          path="/dev/sinty/plugin/wallpaper-rotator/">
+
+    <key name="enabled" type="b">
+      <default>true</default>
+      <summary>Rotate the desktop wallpaper</summary>
+      <description>
+        When enabled, the desktop wallpaper changes automatically at the
+        configured interval.
+      </description>
+    </key>
+
+    <key name="interval-minutes" type="u">
+      <default>10</default>
+      <range min="1" max="1440"/>
+      <summary>Minutes between wallpaper changes</summary>
+      <description>
+        How long each wallpaper is shown, in minutes. The lower bound is one
+        minute; the upper bound is one day.
+      </description>
+    </key>
+
+    <key name="directory" type="s">
+      <default>''</default>
+      <summary>Folder to take wallpapers from</summary>
+      <description>
+        Absolute path to a folder of images. When empty, the folder of the
+        current wallpaper is used, so the plugin does something sensible
+        without being configured first.
+      </description>
+    </key>
+
+    <key name="shuffle" type="b">
+      <default>true</default>
+      <summary>Choose the next wallpaper at random</summary>
+      <description>
+        When enabled, the next wallpaper is chosen at random, avoiding an
+        immediate repeat. When disabled, wallpapers are shown in filename
+        order.
+      </description>
+    </key>
+
+  </schema>
+</schemalist>
