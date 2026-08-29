@@ -152,7 +152,10 @@ namespace WallpaperRotator {
             if (pics.size == 1) { apply(pics[0]); return; }
 
             string current = last_shown ?? current_path();
-            string chosen;
+            /* Seeded rather than left unassigned: valac cannot prove the
+             * do/while below assigns it on every path, and pics is known
+             * non-empty here (the size 0 and size 1 cases returned above). */
+            string chosen = pics[0];
 
             if (settings.get_boolean("shuffle")) {
                 /* Avoid repeating the image already on screen. With n > 1 this
