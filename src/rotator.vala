@@ -18,12 +18,14 @@
  */
 
 using Gtk;
+using Adw;
 
 namespace WallpaperRotator {
 
     private const string DESKTOP_SCHEMA = "dev.sinty.desktop";
     private const string DESKTOP_KEY    = "background-picture-uri";
     private const string OWN_SCHEMA     = "dev.sinty.plugin.wallpaper-rotator";
+    private const string EMPTY_HINT     = "Folder of the current wallpaper";
 
     public class Plugin : Object, Singularity.Plugin {
 
@@ -191,46 +193,158 @@ namespace WallpaperRotator {
         /* ---------------------------------------------------------------- */
 
         public Gtk.Widget? get_settings_widget() {
-            var box = new Gtk.Box(Gtk.Orientation.VERTICAL, 12) {
-                margin_top = 12, margin_bottom = 12,
-                margin_start = 12, margin_end = 12
+            var group = new Adw.PreferencesGroup() {
+                margin_top    = 12,
+                margin_bottom = 12,
+                margin_start  = 12,
+                margin_end    = 12
             };
 
-            var on = new Gtk.Switch() { valign = Gtk.Align.CENTER };
-            settings.bind("enabled", on, "active", SettingsBindFlags.DEFAULT);
-            box.append(row("Rotate wallpaper", on));
+            /* ---- Rotate on/off ---- */
+            var on_row = new Adw.SwitchRow() {
+                title = "Rotate wallpaper"
+            };
+            settings.bind("enabled", on_row, "active",
+                          GLib.SettingsBindFlags.DEFAULT);
+            group.add(on_row);
 
-            var spin = new Gtk.SpinButton.with_range(1, 1440, 1) {
+            /* ---- Interval ---- */
+            var interval_row = new Adw.SpinRow.with_range(1, 1440, 1) {
+                title = "Minutes between changes"
+            };
+            settings.bind("interval-minutes", interval_row, "value",
+                          GLib.SettingsBindFlags.DEFAULT);
+            group.add(interval_row);
+
+            /* ---- Shuffle ---- */
+            var shuffle_row = new Adw.SwitchRow() {
+                title = "Random order"
+            };
+            settings.bind("shuffle", shuffle_row, "active",
+                          GLib.SettingsBindFlags.DEFAULT);
+            group.add(shuffle_row);
+
+            /* ---- Folder chooser ---- */
+            var folder_row = new Adw.ActionRow() {
+                title = "Wallpaper folder"
+            };
+            string current_dir = settings.get_string("directory");
+            folder_row.subtitle = (current_dir != "") ? current_dir : EMPTY_HINT;
+
+            var choose_btn = new Gtk.Button.with_label("Choose…") {
                 valign = Gtk.Align.CENTER
             };
-            settings.bind("interval-minutes", spin, "value", SettingsBindFlags.DEFAULT);
-            box.append(row("Minutes between changes", spin));
+            choose_btn.clicked.connect(() => {
+                var dialog = new Gtk.FileDialog() {
+                    title = "Select wallpaper folder"
+                };
+                /* Seed the chooser at the current selection when we have one
+                 * so a follow-up "Choose…" lands in the same place. */
+                string seed = settings.get_string("directory");
+                if (seed == "") {
+                    string? here = source_directory();
+                    if (here != null) seed = here;
+                }
+                if (seed != "") {
+                    try {
+                        dialog.set_initial_folder(GLib.File.new_for_path(seed));
+                    } catch (GLib.Error e) { /* non-fatal */ }
+                }
+                dialog.select_folder.begin(
+                    (Gtk.Window?) folder_row.get_root(),
+                    null,
+                    (obj, res) => {
+                        GLib.File? folder = null;
+                        try {
+                            folder = dialog.select_folder.end(res);
+                        } catch (GLib.Error e) {
+                            /* User cancelled or GIO errored — leave as is. */
+                            return;
+                        }
+                        if (folder == null) return;
+                        string? path = folder.get_path();
+                        if (path == null) return;
+                        /* Direct write rather than a one-way bind: the row's
+                         * subtitle is driven from the key, so updating the
+                         * key is what makes the new path visible. */
+                        settings.set_string("directory", path);
+                    }
+                );
+            });
+            folder_row.add_suffix(choose_btn);
+            folder_row.activatable_widget = choose_btn;
+            group.add(folder_row);
 
-            var shuffle = new Gtk.Switch() { valign = Gtk.Align.CENTER };
-            settings.bind("shuffle", shuffle, "active", SettingsBindFlags.DEFAULT);
-            box.append(row("Random order", shuffle));
-
-            var folder = new Gtk.Entry() {
-                hexpand = true,
-                placeholder_text = "Folder of the current wallpaper"
+            /* ---- Live status ---- */
+            var status = new Gtk.Label(null) {
+                xalign       = 0,
+                margin_top   = 6,
+                margin_start = 12,
+                margin_end   = 12,
+                wrap         = true,
+                /* Dim secondary text so it doesn't compete with the rows. */
+                css_classes  = { "dim-label", "caption" }
             };
-            settings.bind("directory", folder, "text", SettingsBindFlags.DEFAULT);
-            box.append(row("Wallpaper folder", folder));
+            refresh_status(status);
 
-            var next = new Gtk.Button.with_label("Change now");
-            next.clicked.connect(() => advance());
-            next.halign = Gtk.Align.START;
-            box.append(next);
+            /* Mirror the old Gtk.Entry's two-way refresh: any change to the
+             * "directory" key — chooser or external — updates both the
+             * subtitle and the status line. */
+            settings.changed["directory"].connect(() => {
+                string d = settings.get_string("directory");
+                folder_row.subtitle = (d != "") ? d : EMPTY_HINT;
+                refresh_status(status);
+            });
 
-            return box;
+            /* Wrap the group + status in a single box so the shell sees one
+             * drop-in Gtk.Widget. */
+            var outer = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+            outer.append(group);
+            outer.append(status);
+
+            /* ---- Change now ---- */
+            var next = new Gtk.Button.with_label("Change now") {
+                halign       = Gtk.Align.START,
+                margin_start = 12,
+                margin_end   = 12,
+                margin_top   = 6,
+                margin_bottom = 12
+            };
+            next.clicked.connect(() => {
+                advance();
+                refresh_status(status);
+            });
+            outer.append(next);
+
+            return outer;
         }
 
-        private static Gtk.Widget row(string label, Gtk.Widget control) {
-            var h = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 12);
-            var l = new Gtk.Label(label) { xalign = 0, hexpand = true };
-            h.append(l);
-            h.append(control);
-            return h;
+        /** Refresh the "N images · current: foo.jpg" status line. Reuses
+         * the real scan path so the count and the filename can never
+         * disagree with what rotation would actually pick. */
+        private void refresh_status(Gtk.Label label) {
+            var pics = candidates();
+            int n = pics.size;
+
+            string now = current_path() ?? last_shown ?? "";
+            /* English-only copy; this plugin is loaded by the shell which
+             * does not set a text domain for extension widgets. */
+            string count_text = (n == 1)
+                ? "1 image in folder"
+                : "%d images in folder".printf(n);
+            if (now == "") {
+                label.label = "%s · no wallpaper set".printf(count_text);
+                return;
+            }
+
+            /* current_path() returns a local path. Show just the basename
+             * so the line stays readable when the path is long. */
+            string basename = now;
+            int slash = now.last_index_of("/");
+            if (slash >= 0 && slash + 1 < now.length)
+                basename = now.substring(slash + 1);
+
+            label.label = "%s · current: %s".printf(count_text, basename);
         }
     }
 }

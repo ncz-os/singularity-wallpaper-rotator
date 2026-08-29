@@ -20,6 +20,8 @@ deps = [
   dependency('gtk4'),
   dependency('gee-0.8'),
   dependency('libpeas-2'),
+  # Adwaita rows — PreferencesGroup / SwitchRow / SpinRow / ActionRow.
+  dependency('libadwaita-1'),
   # Provides the Singularity.Plugin interface and PluginContext.
   dependency('singularity-1.0'),
 ]
